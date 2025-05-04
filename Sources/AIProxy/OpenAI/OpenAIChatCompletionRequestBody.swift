@@ -340,16 +340,24 @@ extension OpenAIChatCompletionRequestBody.Message {
         /// "high" will enable "high res" mode, which first allows the model to first see the low res image (using 85
         /// tokens) and then creates detailed crops using 170 tokens for each 512px x 512px tile.
         case imageURL(URL, detail: ImageDetail? = nil)
+        
+        /// "id" we should get from uploaded iflr
+        case file(id: String)
 
         private enum RootKey: String, CodingKey {
             case type
             case text
             case imageURL = "image_url"
+            case file
         }
 
         private enum ImageKey: CodingKey {
             case url
             case detail
+        }
+        
+        private enum FileKey: CodingKey {
+            case file_id
         }
 
         public func encode(to encoder: any Encoder) throws {
@@ -365,6 +373,10 @@ extension OpenAIChatCompletionRequestBody.Message {
                 if let detail = detail {
                     try nestedContainer.encode(detail, forKey: .detail)
                 }
+            case .file(let id):
+                try container.encode("file", forKey: .type)
+                var nestedContainer = container.nestedContainer(keyedBy: FileKey.self, forKey: .file)
+                try nestedContainer.encode(id, forKey: .file_id)
             }
         }
     }
