@@ -8,7 +8,7 @@ import UIKit
 public enum AIProxy {
 
     /// The current sdk version
-    public static let sdkVersion = "0.96.1"
+    public static let sdkVersion = "0.123.0"
 
     /// Configures the AIProxy SDK. Call this during app launch by adding an `init` to your SwiftUI MyApp.swift file, e.g.
     ///
@@ -74,6 +74,9 @@ public enum AIProxy {
     ///                              4. Tap the plus sign next to 'Capability'
     ///                              5. Add iCloud
     ///                              6. Select the 'Key-value storage' service
+    ///
+    ///                          If possible, StoreKit's appTransactionID will be used as the stable ID.
+    ///                          If the app store receipt cannot be verified then we fall back to a GUID synced across iCloud-backed keychain and UKVS.
     public static func configure(
         logLevel: AIProxyLogLevel,
         printRequestBodies: Bool,
@@ -82,16 +85,10 @@ public enum AIProxy {
         useStableID: Bool
     ) {
         aiproxyCallerDesiredLogLevel = logLevel
-        self.printRequestBodies = printRequestBodies
-        self.printResponseBodies = printResponseBodies
-        self.resolveDNSOverTLS = resolveDNSOverTLS
-        if useStableID {
-            Task.detached {
-                if let stableID = await self._getStableIdentifier() {
-                    self.stableID = stableID
-                }
-            }
-        }
+        AIProxyConfiguration.printRequestBodies = printRequestBodies
+        AIProxyConfiguration.printResponseBodies = printResponseBodies
+        AIProxyConfiguration.resolveDNSOverTLS = resolveDNSOverTLS
+        AIProxyConfiguration.useStableID = useStableID
     }
 
     /// Flag to use DNS over TLS.
@@ -109,21 +106,21 @@ public enum AIProxy {
     /// Or using cloudflare's resolver
     ///
     ///    kdig @1.1.1.1 api.aiproxy.com +noall +stats
-    public static var resolveDNSOverTLS = true
+    public static var resolveDNSOverTLS: Bool {
+        AIProxyConfiguration.resolveDNSOverTLS
+    }
 
     public static var stableID: String? {
-        get {
-            protectedPropertyQueue.sync { _stableID }
-        }
-        set {
-            protectedPropertyQueue.async(flags: .barrier) { _stableID = newValue }
-        }
+        AIProxyConfiguration.stableID
     }
-    private static var _stableID: String?
 
-    public static var printRequestBodies: Bool = false
-    public static var printResponseBodies: Bool = false
+    public static var printRequestBodies: Bool {
+        AIProxyConfiguration.printRequestBodies
+    }
 
+    public static var printResponseBodies: Bool {
+        AIProxyConfiguration.printResponseBodies
+    }
 
     /// - Parameters:
     ///   - partialKey: Your partial key is displayed in the AIProxy dashboard when you submit your provider's key.
@@ -222,13 +219,18 @@ public enum AIProxy {
     ///
     /// - Parameters:
     ///   - unprotectedAPIKey: Your OpenAI API key
+    ///   - baseURL: Optional base URL for the API requests
+    ///   - requestFormat: If you are sending requests to your own Azure deployment, set this to `.azureDeployment`.
+    ///                   Otherwise, you may leave this set to its default value of `.standard`
     /// - Returns: An instance of OpenAIService configured and ready to make requests
     public static func openAIDirectService(
         unprotectedAPIKey: String,
-        baseURL: String? = nil
+        baseURL: String? = nil,
+        requestFormat: OpenAIRequestFormat = .standard
     ) -> OpenAIService {
         return OpenAIDirectService(
             unprotectedAPIKey: unprotectedAPIKey,
+            requestFormat: requestFormat,
             baseURL: baseURL
         )
     }
@@ -999,17 +1001,7 @@ public enum AIProxy {
 
     @available(*, deprecated, message: "Use AIProxy.configure and pass true for useStableID")
     public static func getStableIdentifier() async -> String? {
-        return await self._getStableIdentifier()
-    }
-
-    @NetworkActor
-    private static func _getStableIdentifier() async -> String? {
-        do {
-            return try await AnonymousAccountStorage.sync()
-        } catch {
-            logIf(.critical)?.critical("Could not configure an AIProxy anonymous account: \(error.localizedDescription)")
-        }
-        return nil
+        return await AIProxyConfiguration._getStableIdentifier()
     }
 
     public static func base64EncodeAudioPCMBuffer(from buffer: AVAudioPCMBuffer) -> String? {

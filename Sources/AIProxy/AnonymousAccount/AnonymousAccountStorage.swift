@@ -18,10 +18,10 @@ final class AnonymousAccountStorage {
     /// A best-effort anonymous ID that is stable across multiple devices of an iCloud account
     static var resolvedAccount: AnonymousAccount? {
         get {
-            protectedPropertyQueue.sync { _resolvedAccount }
+            ProtectedPropertyQueue.resolvedAccount.sync { _resolvedAccount }
         }
         set {
-            protectedPropertyQueue.async(flags: .barrier) { _resolvedAccount = newValue }
+            ProtectedPropertyQueue.resolvedAccount.async(flags: .barrier) { _resolvedAccount = newValue }
         }
     }
     private static var _resolvedAccount: AnonymousAccount?
@@ -31,6 +31,7 @@ final class AnonymousAccountStorage {
 
     /// This is expected to be called as part of the application launch.
     static func sync() async throws -> String {
+
         #if false
         try await AIProxyStorage.clear()
         #endif
@@ -58,7 +59,7 @@ final class AnonymousAccountStorage {
         // meaning the one that was created earliest. The design of this class is to eventually resolve out
         // to the earliest account across multiple devices.
         if !AIProxyStorage.ukvsSync() {
-            logIf(.error)?.error("Could not synchronize NSUbiquitousKeyValueStore. Please ensure you enabled the key/value store in Target > Signing & Capabilities > iCloud > Key-Value storage?")
+            logIf(.error)?.error("AIProxy: Could not synchronize NSUbiquitousKeyValueStore. Please ensure you enabled the key/value store in Target > Signing & Capabilities > iCloud > Key-Value storage")
         }
         if let ukvsAccountData = AIProxyStorage.ukvsAccountData() {
             let ukvsAccount = try AnonymousAccount.deserialize(from: ukvsAccountData)
